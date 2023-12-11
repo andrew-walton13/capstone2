@@ -27,6 +27,28 @@ prop.table(table(app_test$TARGET))
 ![image](https://github.com/andrew-walton13/capstone2/assets/123606002/baf6dfa4-5da8-4d3a-8ef2-f6208499c646)
 
 
+
+
+```{r, warning=FALSE, message=FALSE}
+
+# Perform oversampling of the minority class
+oversampled_data <- ovun.sample(TARGET ~ ., data = app_train, method = "over", p=0.5, seed=1)$data
+
+prop.table(table(oversampled_data$TARGET))
+
+train_input_over <- subset(oversampled_data, select = -TARGET)
+train_target_over <- oversampled_data$TARGET
+
+
+```
+
+No       Yes 
+0.4996919 0.5003081 
+
+
+
+
+
 We built various models in our group, as we wanted to try a few different options. We had three models that were pretty successful in various ways, but ultimately we decided that our logistic regression model would be the best model to recommend to home credit. There were various reasons behind this. One, it had a very good AUC score. Two, being a logistic regression model it was easier to explain why the model made the predictions that it made, which we wouldn't be able to do with the black box models we built. This is important for a financial institution to ensure there is reasoning behind loan decisions and could protect them from potential claims of discrimination. Third, it had the fastest compute time of all of our models by a fairly significant margin.
 
 
