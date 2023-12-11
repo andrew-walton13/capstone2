@@ -1,0 +1,430 @@
+---
+title: "naive bayes + logistic regression capstone"
+author: "Andrew Walton"
+date: "2023-11-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(skimr)
+library(janitor)
+library(caret)
+library(tictoc)
+library(car)
+library(corrplot)
+library(glmnet)
+library(lares)
+library(e1071)
+library(ROCR)
+library(missForest)
+library(ISLR)
+library(pROC)
+library(ROSE)
+library(rminer)
+library(tidymodels)
+library(dplyr)
+library(ranger)
+library(themis)
+library(dplyr)
+library(xgboost)
+library(pROC)
+library(magrittr)
+
+
+```
+
+## Model 4
+
+### Data Preparation
+
+```{r, warning=FALSE, message=FALSE}
+appl_test <- read.csv(file = "application_test.csv", stringsAsFactors = TRUE)
+appl_train1 <- read.csv(file = "application_train.csv", stringsAsFactors = TRUE)
+
+appl_train1$TARGET <- factor(appl_train1$TARGET, 
+                             levels = c(0, 1), labels = c('No', 'Yes'))
+
+
+```
+
+Bringing the data that we will use for the Naive Bayes model and converting the target variable to a factor
+
+```{r, warning=FALSE, message=FALSE}
+
+prop.table(table(appl_train1$TARGET))
+
+```
+
+Reviewing the heavy imbalance in the data set that has previously been discussed. This may cause problems down the line for our dataset
+
+```{r, warning=FALSE, message=FALSE}
+
+
+appl_train <- appl_train1 %>%
+    select ('TARGET', 'AMT_CREDIT', 'AMT_GOODS_PRICE', 'CODE_GENDER', 'FLAG_OWN_CAR', 'FLAG_OWN_REALTY', 'NAME_HOUSING_TYPE', 'OCCUPATION_TYPE', 'NAME_EDUCATION_TYPE')
+
+```
+
+Using a subset of the data using some of the predictors that have previously been identifed as influential and significant
+
+### Modeling Process 
+
+```{r, warning=FALSE, message=FALSE}
+
+set.seed(1234)
+
+# Create index for 70/30 split
+dataTrain <- createDataPartition(appl_train$TARGET, p = 0.70, list = FALSE)
+
+# Create train and test datasets
+app_train <- appl_train[dataTrain, ]
+app_test <- appl_train[-dataTrain, ]
+
+
+app_train_target <- appl_train[dataTrain,1]
+app_test_target <- appl_train[-dataTrain,1]
+app_train_input <- appl_train[dataTrain,-1]
+app_test_input <- appl_train[-dataTrain,-1]
+
+
+# Check distribution of target variable in train and test
+prop.table(table(app_train$TARGET))
+prop.table(table(app_test$TARGET))
+
+```
+
+Here we are splitting the data into test and train sets (and targets and inputs) that we will us in our model
+
+```{r, warning=FALSE, message=FALSE}
+
+app_m2_nb <- naiveBayes(app_train_input, app_train_target)
+
+str(app_m2_nb)
+
+summary(app_m2_nb)
+
+
+```
+
+Here we set up the initial structure of our Naive Bayes model
+
+```{r, warning=FALSE, message=FALSE}
+
+predicted_target_test_nb <- predict(app_m2_nb, app_test_input)
+
+mmetric(app_test_target, predicted_target_test_nb, metric="CONF")
+
+mmetric(app_test_target, predicted_target_test_nb, metric=c("ACC","TPR","PRECISION","F1"))
+
+# For comparison, apply the model to the train set and generate evaluation metrics. 
+# Check out the performance drop in the holdout set.
+
+predicted_target_train_nb <- predict(app_m2_nb, app_train_input)
+
+mmetric(app_train_target, predicted_target_train_nb, metric="CONF")
+
+mmetric(app_train_target, predicted_target_train_nb, metric=c("ACC","TPR","PRECISION","F1"))
+
+
+```
+
+Here we run into an issue that is preventing this Naive Bayes model from returning good results. That is that the model the data in the model is so unbalanced that it is essentially predicting "no default" for every case. Because the data is heavily inbalanced, that means that the accuracy is technically very high since more than 90% of the individuals in the data set will not default. Unfortunately, the model is not able to help us predict who will default, which is what we are interested in.
+
+Conventional classification algorithms are typically optimized for achieving high overall accuracy, which can result in diminished performance when dealing with imbalanced data. Like many other conventional classifiers, naive Bayes (NB) may encounter challenges in accurately predicting minority instances due to its sensitivity to class distribution.
+
+```{r, warning=FALSE, message=FALSE}
+
+# Perform oversampling of the minority class
+oversampled_data <- ovun.sample(TARGET ~ ., data = app_train, method = "over", p=0.5, seed=1)$data
+
+prop.table(table(oversampled_data$TARGET))
+
+train_input_over <- subset(oversampled_data, select = -TARGET)
+train_target_over <- oversampled_data$TARGET
+
+
+```
+
+We have performed oversampling of the minority class to make the data balance. We will now recreate the model using the oversampling model.
+
+
+
+```{r, warning=FALSE, message=FALSE}
+
+app_m3_nb <- naiveBayes(train_input_over, train_target_over)
+
+str(app_m3_nb)
+
+summary(app_m3_nb)
+
+
+```
+
+creating a new model using the data that oversampled from the minority class
+
+### Model Performance
+
+```{r, warning=FALSE, message=FALSE}
+
+predicted_target_test_nb_over <- predict(app_m3_nb, app_test_input)
+
+mmetric(app_test_target, predicted_target_test_nb_over, metric="CONF")
+
+mmetric(app_test_target, predicted_target_test_nb_over, metric=c("ACC","TPR","PRECISION","F1"))
+
+# For comparison, apply the model to the train set and generate evaluation metrics. 
+# Check out the performance drop in the holdout set.
+
+predicted_target_train_nb_over <- predict(app_m3_nb, train_input_over)
+
+mmetric(train_target_over, predicted_target_train_nb_over, metric="CONF")
+
+mmetric(train_target_over, predicted_target_train_nb_over, metric=c("ACC","TPR","PRECISION","F1"))
+
+
+```
+
+We can see from these metrics that while the model has improved, it is still not great at correctly predicting when someone will default on their loan. The precision for class 2, or the class that will default on their loan, is only 10.20%. The accuracy is just under 50% because the model is once again good at predicting no, but not good at predicting when someone will default on their loan
+
+```{r, warning=FALSE, message=FALSE}
+
+summary(app_test_target)
+
+predicted_classes <- predict(app_m3_nb, newdata = app_test_input, type = "class")
+
+# Convert class labels to numeric values
+predicted_numeric <- ifelse(predicted_classes == "No", 1, 0)
+
+
+# Create a ROC object
+roc_obj <- roc(response = app_test_target, predictor = predicted_numeric)
+
+# Calculate AUC
+auc_value <- auc(roc_obj)
+
+# Print the AUC value
+cat("AUC:", auc_value, "\n")
+
+#Plot ROC Curve
+plot(roc_obj, col = 'orange', main = 'NB ROC Curve')
+
+
+
+```
+
+We can see from the AUC score that this model is inferior to the previous 3 models discussed. Why is this the case? Conventional classification algorithms are typically optimized for achieving high overall accuracy, which can result in diminished performance when dealing with imbalanced data, such as the case we have. We tried to counteract that by balancing the data and oversampling the minority class, and it improved performance but not enough for this to be chosen as a preferred model type. 
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(tidyr)
+library(readxl)
+library(tidymodels)
+library(ranger)
+library(themis)
+library(e1071)
+library(tidyverse)
+library(scatterplot3d)
+library(arules)
+library(RWeka)
+library(psych)
+library(knitr)
+library(RWeka)
+library(rpart)
+library(rpart.plot)
+library(rminer) 
+library(C50)
+library(caret)
+library(rmarkdown)
+library(kernlab)
+library(rJava)
+library(ROCR)
+library(skimr)
+library(janitor)
+library(caret)
+library(tictoc)
+library(car)
+library(corrplot)
+library(glmnet)
+library(lares)
+library(e1071)
+library(ROCR)
+library(missForest)
+library(ISLR)
+library(pROC)
+library(ROSE)
+library(rminer)
+
+```
+
+
+```{r}
+appl_test <- read.csv(file = "application_test.csv", stringsAsFactors = TRUE)
+appl_train1 <- read.csv(file = "application_train.csv", stringsAsFactors = TRUE)
+
+appl_train1$TARGET <- factor(appl_train1$TARGET, 
+                             levels = c(0, 1), labels = c('No', 'Yes'))
+
+
+```
+
+
+
+```{r}
+
+prop.table(table(appl_train1$TARGET))
+
+
+
+```
+
+```{r}
+
+
+appl_train <- appl_train1 %>%
+    select ('TARGET', 'AMT_CREDIT', 'AMT_GOODS_PRICE', 'CODE_GENDER', 'FLAG_OWN_CAR', 'FLAG_OWN_REALTY', 'NAME_HOUSING_TYPE', 'OCCUPATION_TYPE', 'NAME_EDUCATION_TYPE')
+
+```
+
+```{r}
+
+set.seed(123)
+
+#Create index for 70/30 split
+dataTrain <- createDataPartition(appl_train$TARGET, p = 0.75, list = FALSE)
+
+#Create train and test datasets
+app_train <- appl_train[dataTrain, ]
+app_test <- appl_train[-dataTrain, ]
+
+#Check distribution of target variable in train and test
+prop.table(table(app_train$TARGET))
+
+
+
+
+
+app_train_target <- appl_train[dataTrain,1]
+app_test_target <- appl_train[-dataTrain,1]
+app_train_input <- appl_train[dataTrain,-1]
+app_test_input <- appl_train[-dataTrain,-1]
+
+```
+
+
+
+
+```{r}
+
+logistical_m <- glm(TARGET ~ AMT_CREDIT + CODE_GENDER + AMT_GOODS_PRICE + 
+    FLAG_OWN_CAR + +FLAG_OWN_REALTY + NAME_HOUSING_TYPE + OCCUPATION_TYPE + 
+    NAME_EDUCATION_TYPE, family = binomial(link = "logit"), data = app_train)
+
+
+
+```
+
+```{r}
+
+summary(logistical_m)
+
+
+```
+
+```{r}
+
+
+varImp(logistical_m, scale = TRUE)
+
+```
+
+
+```{r}
+
+logistical_m_2 <- glm(TARGET ~ AMT_CREDIT +
+                    CODE_GENDER+AMT_GOODS_PRICE+
+                    + FLAG_OWN_CAR, data = app_train, 
+                  family = binomial(link = 'logit'))
+
+```
+
+
+
+```{r}
+
+summary(logistical_m_2)
+
+```
+
+```{r}
+
+
+
+
+
+logistical_m3 <- glm(TARGET ~ AMT_CREDIT +
+                    CODE_GENDER+AMT_GOODS_PRICE+
+                    + FLAG_OWN_CAR + OCCUPATION_TYPE, data = app_train, 
+                  family = binomial(link = 'logit'))
+
+```
+
+
+
+```{r}
+
+summary(logistical_m3)
+
+
+```
+
+
+
+```{r}
+varImp(logistical_m3, scale = TRUE)
+
+
+```
+
+
+The first model is better than the second and third because it has the lowest AIC score
+```{r}
+
+logic_pred <- predict(logistical_m, app_test, type = 'response')
+
+#Create ROC Curve
+logic_ROC_c <- roc(app_test$TARGET, logic_pred)
+
+
+
+
+```
+
+```{r}
+
+plot(logic_ROC_c, col = 'green', main = 'Logistic Model AUC ')
+
+
+
+
+```
+
+```{r}
+auc(logic_ROC_c)
+```
+
+
+
+
+
+
+
+
+ 
+

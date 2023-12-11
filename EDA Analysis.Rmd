@@ -1,0 +1,623 @@
+---
+title: "EDA Analysis"
+author: "Andrew Walton"
+date: "2023-10-14"
+output: html_document
+---
+
+# Table of Contents:
+
+
+0. Introduction & Objectives
+1. Load Libraries
+2. Import Test and Train Data Sets
+3. General Summaries of Test and Train Data Sets
+4. Mean of Target Variable
+5. Summary of Number of Credit Checks by Day/Month/Quarter/Year
+6. Summary Table Grouped By Gender, Car Ownership, and Property Ownership
+7. Summary by Occupation
+8. Summary by Amount of Credit Checks in the Last Year
+9. Regression Model - Loan Details (Loan Amount, Loan Length, Credit)
+10 Key Takeaways
+
+
+# OBJECTIVES:
+
+The problem that Home Credit has is that when it makes loans it does not know whether or not the people they lend to will pay them back. Additionally, they are trying to broaden financial inclusion for people with insufficient or non-existent credit histories. This means that they have less data than normal and it makes it even more difficult to know whether the loan will be repaid. If they can find a good model that predicts repayment or non-payment with high accuracy, it will greatly help the bank know to whom they should and should not lend to. 
+
+We will be able to judge whether or not the model is successful by looking at the amount of correct classifications
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+# Load libraries for EDA assignment
+
+
+
+library(tidyverse)
+library(dplyr)
+library(C50)
+library(e1071)
+library(scatterplot3d)
+library(tidyverse)
+library(arules)
+library(RWeka)
+library(psych)
+library(C50)
+library(knitr)
+library(RWeka)
+library(rpart)
+library(rpart.plot)
+library(rminer) 
+library(e1071)
+library(C50)
+library(caret)
+library(rmarkdown)
+library(kernlab)
+library(rpart)
+library(rpart.plot)
+library(rJava)
+library(pROC)
+library(ROSE)
+```
+
+```{r}
+
+# Import test and train data sets
+app_test <- read.csv("application_test.csv", stringsAsFactors = TRUE)
+app_train <- read.csv("application_train.csv", stringsAsFactors = TRUE)
+```
+
+
+
+
+```{r}
+# general summary of the test data to become more familiar with the fields and their values
+summary(app_test)
+
+
+```
+
+
+
+
+```{r}
+# general summary of the train data to become more familiar with the fields and their values
+summary(app_train)
+```
+
+It looks like we have a lot of NAs in both our test and training sets. We have over 48,000 observations in our test set and 307,000 in our training set, and since we have so many oberservations we also have multiple fields with thousands (or tens of thousands) of missing values.
+
+```{r}
+# Finding the mean of the TARGET variable so that we know what percent of people with loans have payment difficulties
+
+mean(app_train$TARGET)
+
+```
+
+The mean for the TARGET is .0807 which means that roughly 8% of the people attempting to payback their loans are a "client with payment difficulties." This means that if we were to go with a majority class classifier we would be correct ~92% in classifying all loan recipients as not having difficulties paying the loan back.
+
+```{r}
+# summary of Amount of Credit checks in the last year
+summary(app_train$AMT_REQ_CREDIT_BUREAU_YEAR)
+```
+
+One example of this is the AMT_REQ_CREDIT_BUREAU_YEAR where we have 41519 NAs in the test set. The question we need to answer is what to do with these NAs? Can we assume that an NA is equivelant to 0 checks with the credit bureau and therefore can we substitute in 0s here. Does an NA mean that that they for some reason have no credit? Why do we not have information for this field. Answering these questions and deciding how to account for these NAs could have a large impact on the model.
+
+```{r}
+# general summary of the train data to become more familiar with the fields and their values
+summary(app_train$AMT_REQ_CREDIT_BUREAU_YEAR)
+summary(app_train$AMT_REQ_CREDIT_BUREAU_QRT)
+summary(app_train$AMT_REQ_CREDIT_BUREAU_MON)
+summary(app_train$AMT_REQ_CREDIT_BUREAU_DAY)
+```
+
+I also think that we have some mistaken values here: For example, in the train data set the MAX for the AMT_REQ_CREDIT_BUREAU_QRT field is 261. That seems unreasonably high, and it especially does not make sense that the max for AMT_REQ_CREDIT_BUREAU_YEAR is 25 since you would expect to see the number for the whole year be higher than the quarter and the number for the quarter is 236 higher. We might have a similar but less extreme problem with AMT_REQ_CREDIT_BUREAU_MON
+
+
+```{r}
+
+# Creating a summary table to provide some insights into the relationship between the target and predictors
+
+app_train %>%
+  group_by(CODE_GENDER, FLAG_OWN_CAR, FLAG_OWN_REALTY) %>%
+  summarize(n = n(),
+            payment_difficulties = mean(TARGET))
+```
+
+Here we can see that in our summary table, men have a much higher rate of being late on at least one payment as opposed to women. I would like to explore why that is the case and if there are any other factors that influence that other than simply gender.
+
+It also appears that for both men and women, those that don't own a car or a house are the most likely to not make a payment on time, followed by those that own a car but not a property, and then those that own a property are the least likely to be late on a payment. This may be something to explore further as well.
+
+```{r}
+
+# Summary table of the target variable when grouped by occupation
+
+app_train %>%
+  group_by(OCCUPATION_TYPE) %>%
+  summarize(n = n(),
+            default_rate = mean(TARGET))
+
+```
+
+Interestingly, low-skill laborers seem to have a much higher rate of late_payment than every other occupation. It will be interesting to explore this relationship further and see if that occupation has high correlation with any other variables
+
+```{r}
+
+# Summary table grouped by the amount of credit checks in the last year
+
+app_train %>%
+  group_by(AMT_REQ_CREDIT_BUREAU_YEAR) %>%
+  summarize(n = n(),
+            default_rate = mean(TARGET))
+```
+
+
+The rate of late payment here is not high as I would have thought as amount of credit checks goes up, but we also have a lot lower number of observations with the higher number of credit checks.
+
+```{r}
+summary(app_train$AMT_REQ_CREDIT_BUREAU_YEAR)
+```
+
+
+```{r}
+# Regression model to look at the effects the different loan attributes have on the target variable
+
+loan_details_lm <- lm(TARGET ~ AMT_INCOME_TOTAL+ AMT_CREDIT+ AMT_GOODS_PRICE, data = app_train)
+
+summary(loan_details_lm)
+```
+
+
+Looking at the loan details, it appears that the AMT_CREDIT & AMT_GOODS_PRICE are statistically significant in changing the target variable but the AMT_INCOME_TOTAL is not statistically significant. I would like to explore this further as I would have expected that income would have a significant affect on the ability to pay back the loan.
+
+
+Key Takeaways:
+
+1. There are a lot of attributes with NAs - it will be important to find the best solution possible for each attribute to resolve this issue. It will likely require different methods for different attributes.
+
+2. There are lots of different attributes in these datasets. It is important that as we test different types of models we factor in their ability to account for all attributes.
+
+3. With the high number of attributes previously mentioned, it is likely that there is high levels of correlation between some of them.
+
+4. Some of the attributes I am most interested in so far are Gender, Car/House ownership, Occupation, and the loan details such as amount, length, and credit.
+
+5. Some fields, such as the amount of credit checks in the last quarter seem to have errors.
+
+## Modeling
+
+```{r}
+# Regression model to look at the effects the different loan attributes have on the target variable
+loan_details_lm <- lm(TARGET ~ AMT_INCOME_TOTAL+ AMT_CREDIT+ AMT_GOODS_PRICE, data = app_train)
+
+summary(loan_details_lm)
+
+```
+
+
+
+```{r}
+# Regression model to look at the effects the different loan attributes have on the target variable
+dem_details_lm <- lm(TARGET ~ NAME_EDUCATION_TYPE + OCCUPATION_TYPE + NAME_HOUSING_TYPE + HOUSETYPE_MODE, data = app_train)
+
+summary(dem_details_lm)
+
+```
+
+
+```{r}
+
+app_train$TARGET <- as.factor(app_train$TARGET)
+
+pred_sub <- app_train %>%
+    select ('TARGET', 'AMT_CREDIT', 'AMT_GOODS_PRICE', 'CODE_GENDER', 'FLAG_OWN_CAR', 'FLAG_OWN_REALTY', 'NAME_HOUSING_TYPE', 'OCCUPATION_TYPE', 'NAME_EDUCATION_TYPE')
+
+
+
+```
+
+
+```{r}
+
+pred_sub_nb <- createDataPartition(pred_sub$TARGET, p = .75, list=FALSE)
+
+nb_train <- pred_sub[pred_sub_nb,]
+nb_test <- pred_sub[-pred_sub_nb,]
+
+
+```
+
+
+```{r}
+
+
+
+app_m1_c50 <- C5.0(TARGET~., nb_train)
+
+str(app_m1_c50)
+summary(app_m1_c50)
+
+```
+
+
+```{r}
+
+app_m2_nb <- naiveBayes(TARGET~., nb_train)
+
+str(app_m2_nb)
+
+summary(app_m2_nb)
+
+
+```
+
+
+```{r}
+
+predicted_target_test_nb <- predict(app_m2_nb, nb_test)
+
+mmetric(nb_test$TARGET, predicted_target_test_nb, metric="CONF")
+
+mmetric(nb_test$TARGET, predicted_target_test_nb, metric=c("ACC","TPR","PRECISION","F1"))
+
+# For comparison, apply the model to the train set and generate evaluation metrics. 
+# Check out the performance drop in the holdout set.
+
+predicted_target_train_nb <- predict(app_m2_nb, nb_train)
+
+mmetric(nb_train$TARGET, predicted_target_train_nb, metric="CONF")
+
+mmetric(nb_train$TARGET, predicted_target_train_nb, metric=c("ACC","TPR","PRECISION","F1"))
+
+
+
+
+```
+
+
+
+
+```{r}
+
+pred_sub_2 <- createDataPartition(pred_sub$TARGET, p = .70, list=FALSE)
+
+ps_train_target <- pred_sub[pred_sub_2,9]
+ps_test_target <- pred_sub[-pred_sub_2,9]
+ps_train_input <- pred_sub[pred_sub_2,-9]
+ps_test_input <- pred_sub[-pred_sub_2,-9]
+
+
+
+```
+
+
+```{r}
+
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+
+MLP(ps_train_target~., data = ps_train_input)
+
+# Inputs
+l <- 0.3
+m <- 0.2
+n <-500
+h <- 'a'
+
+
+
+
+model_mlp_training <- MLP(ps_train_target~., data = ps_train_input,control = Weka_control(L=l,M=m, N=n,H=h))  
+
+predictions_mlp_test <- predict(model_mlp_training, na_test_input)
+
+
+summary(predictions_mlp_test)
+summary(ps_test_target)
+
+predictions_mlp_train <- predict(model_mlp_training, ps_test_input)
+
+# Generating multiple prediction evaluation metrics using rminer package
+# performance of predictions on testing data 
+mmetric(ps_test_target,predictions_mlp_test,c("MAE","RMSE","MAPE","RMSPE","RAE", "RRSE", "COR", "R2"))
+# performance of predictions on training data
+mmetric(ps_train_target,predictions_mlp_train,c("MAE","RMSE","MAPE","RMSPE","RAE", "RRSE", "COR", "R2"))
+
+
+
+```
+
+```{r}
+
+
+
+model_mlp <- MLP(ps_train_target~., data = ps_train_input,control = Weka_control(L=l,M=m, N=n,H='11,11'))
+
+ 
+predictions_na_11_test <- predict(model_11_11_train, na_test_input)
+
+
+summary(predictions_na_11_test)
+summary(na_test_target)
+
+predictions_na_11_train <- predict(model_11_11_train, na_train_input)
+
+# Generating multiple prediction evaluation metrics using rminer package
+# performance of predictions on testing data 
+mmetric(na_test_target,predictions_na_11_test,c("MAE","RMSE","MAPE","RMSPE","RAE", "RRSE", "COR", "R2"))
+# performance of predictions on training data
+mmetric(na_train_target,predictions_na_11_train,c("MAE","RMSE","MAPE","RMSPE","RAE", "RRSE", "COR", "R2"))
+
+
+```
+
+```{r}
+
+set.seed(500)
+model_kvsm_train <- ksvm(ps_train_target~., data = ps_train_input)
+
+predictions_kvsm_test <- predict(model_kvsm_train, ps_test_input)
+
+
+summary(predictions_kvsm_test)
+summary(ps_test_target)
+
+predictions_kvsm_train <- predict(model_kvsm_train, ps_train_input)
+
+# Generating multiple prediction evaluation metrics using rminer package
+# performance of predictions on testing data 
+mmetric(ps_test_target,predictions_kvsm_test,c("MAE","RMSE","MAPE","RMSPE","RAE", "RRSE", "COR", "R2"))
+# performance of predictions on training data
+mmetric(ps_train_target,predictions_kvsm_train,c("MAE","RMSE","MAPE","RMSPE","RAE", "RRSE", "COR", "R2"))
+
+
+```
+
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(tidyr)
+library(readxl)
+library(tidymodels)
+library(ranger)
+library(themis)
+library(e1071)
+library(tidyverse)
+library(scatterplot3d)
+library(arules)
+library(RWeka)
+library(psych)
+library(knitr)
+library(RWeka)
+library(rpart)
+library(rpart.plot)
+library(rminer) 
+library(C50)
+library(caret)
+library(rmarkdown)
+library(kernlab)
+library(rJava)
+library(ROCR)
+
+```
+
+
+```{r}
+appl_test <- read.csv(file = "application_test.csv", stringsAsFactors = TRUE)
+appl_train1 <- read.csv(file = "application_train.csv", stringsAsFactors = TRUE)
+
+appl_train1$TARGET <- factor(appl_train$TARGET, 
+                             levels = c(0, 1), labels = c('No', 'Yes'))
+
+
+```
+
+
+
+```{r}
+
+prop.table(table(appl_train1$TARGET))
+
+
+
+```
+
+```{r}
+
+
+appl_train <- appl_train1 %>%
+    select ('TARGET', 'AMT_CREDIT', 'AMT_GOODS_PRICE', 'CODE_GENDER', 'FLAG_OWN_CAR', 'FLAG_OWN_REALTY', 'NAME_HOUSING_TYPE', 'OCCUPATION_TYPE', 'NAME_EDUCATION_TYPE')
+
+```
+
+```{r}
+
+set.seed(123)
+
+#Create index for 70/30 split
+dataTrain <- createDataPartition(appl_train$TARGET, p = 0.75, list = FALSE)
+
+#Create train and test datasets
+app_train <- appl_train[dataTrain, ]
+app_test <- appl_train[-dataTrain, ]
+
+#Check distribution of target variable in train and test
+prop.table(table(app_train$TARGET))
+
+
+
+
+
+app_train_target <- appl_train[dataTrain,9]
+app_test_target <- appl_train[-dataTrain,9]
+app_train_input <- appl_train[dataTrain,-1]
+app_test_input <- appl_train[-dataTrain,-1]
+
+```
+
+```{r}
+
+app_m2_nb <- naiveBayes(TARGET~., app_train)
+
+str(app_m2_nb)
+
+summary(app_m2_nb)
+
+
+```
+
+
+```{r}
+
+predicted_target_test_nb <- predict(app_m2_nb, app_test)
+
+mmetric(app_test$TARGET, predicted_target_test_nb, metric="CONF")
+
+mmetric(app_test$TARGET, predicted_target_test_nb, metric=c("ACC","TPR","PRECISION","F1"))
+
+# For comparison, apply the model to the train set and generate evaluation metrics. 
+# Check out the performance drop in the holdout set.
+
+predicted_target_train_nb <- predict(app_m2_nb, app_train_input)
+
+mmetric(app_train_target, predicted_target_train_nb, metric="CONF")
+
+mmetric(app_train_target, predicted_target_train_nb, metric=c("ACC","TPR","PRECISION","F1"))
+
+
+
+
+```
+
+```{r}
+
+app_m1_c50 <- C5.0(TARGET~., app_train)
+
+app_m1_c50
+summary(app_m1_c50)
+
+
+```
+
+
+```{r}
+
+predicted_test_c50 <- predict(app_m1_c50, app_test)
+
+# mmetric() functions
+
+mmetric(app_test$TARGET, predicted_test_c50, metric="CONF")
+
+mmetric(app_test$TARGET, predicted_test_c50, metric=c("ACC","TPR","PRECISION","F1"))
+
+# For comparison, apply the model to the train set and generate evaluation metrics. 
+# Check out the performance drop in the holdout set.
+
+predicted_test_c50 <- predict(app_m1_c50, app_train)
+
+mmetric(app_train$TARGET, predicted_test_c50, metric="CONF")
+
+mmetric(app_train$TARGET, predicted_test_c50, metric=c("ACC","TPR","PRECISION","F1"))
+
+```
+
+
+```{r}
+
+logistical_m <- glm(TARGET ~ AMT_CREDIT +CODE_GENDER+
+                    AMT_GOODS_PRICE+FLAG_OWN_CAR+
+                    + FLAG_OWN_REALTY + NAME_HOUSING_TYPE + OCCUPATION_TYPE + NAME_EDUCATION_TYPE, data = app_train, 
+                  family = binomial(link = 'logit'))
+
+
+
+```
+
+```{r}
+
+summary(logistical_m)
+
+
+```
+
+```{r}
+
+
+varImp(logistical_m, scale = TRUE)
+
+```
+
+
+```{r}
+
+logistical_m_2 <- glm(TARGET ~ AMT_CREDIT +
+                    CODE_GENDER+AMT_GOODS_PRICE+
+                    + FLAG_OWN_CAR, data = app_train, 
+                  family = binomial(link = 'logit'))
+
+```
+
+
+
+```{r}
+
+summary(logistical_m_2)
+
+```
+
+The first model is better bewteen the two
+```{r}
+
+logic_pred <- predict(logistical_m, app_test, type = 'response')
+
+#Create ROC Curve
+logic_ROC_c <- roc(app_test$TARGET, logic_pred)
+
+
+
+
+```
+
+```{r}
+
+plot(logic_ROC_c, col = 'green', main = 'Logistic Model AUC ')
+
+
+
+
+```
+
+
+```{r}
+auc(logic_ROC_c)
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
