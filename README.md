@@ -38,7 +38,9 @@ My contribution to the project consisted of a few different things. I built Naiv
 
 Our solution can be vey valuable to the company. If they were to use our model, they would be able to identify more of the people that are likely to default on loans and by avoiding lending to those individuals, they will save themselves millions of dollars in the process. It could also give them more confidence about lending money to more people, as a classification of 'non-default' could lead them to feel more confident in lending to that person and therefore provide more people with loans. This would be a great outcome since lending to people who are underserved by the wider banking system is a goal of the company. 
 
-![image](https://github.com/andrew-walton13/capstone2/assets/123606002/7309958a-3ec9-41bd-9801-a365c2293bbc)
+
+![image](https://github.com/andrew-walton13/capstone2/assets/123606002/ef146d44-8903-44ec-ab11-b9dd688f731c)
+
 
 Assumptions in $100k
 Average Cost of Default Loan -$10
