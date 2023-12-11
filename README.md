@@ -47,6 +47,7 @@ No 0.4996919
 Yes 0.5003081 
 
 
+
 We built various models in our group, as we wanted to try a few different options. We had three models that were pretty successful in various ways, but ultimately we decided that our logistic regression model would be the best model to recommend to home credit. There were various reasons behind this. One, it had a very good AUC score. Two, being a logistic regression model it was easier to explain why the model made the predictions that it made, which we wouldn't be able to do with the black box models we built. This is important for a financial institution to ensure there is reasoning behind loan decisions and could protect them from potential claims of discrimination. Third, it had the fastest compute time of all of our models by a fairly significant margin.
 
 
