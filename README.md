@@ -7,6 +7,7 @@ For this project, our goal is to dive into Home Credit's dataset with the object
 
 Our group's solution to this problem was to build a predictive model that can use the data available to predict whether or not a customer is likely to miss payments on their loan. We went through an extensive EDA process that inlcuded many insights and improvements made to the data, including but not limiting to recognizing the imblance in the target variable which required upsampling and downsampling to resolve, setting an NA threshold of 20% for each predictor (if the percentage of NAs in a predictor was greater than 20%, we excluded that predictor from our models) and imputing the mean or median into many predictors where the NA percentage was lower than 20%. 
 
+
 ```{r, warning=FALSE, message=FALSE}
 
 # Check distribution of target variable in train and test
@@ -14,6 +15,7 @@ prop.table(table(app_train$TARGET))
 prop.table(table(app_test$TARGET))
 
 ```
+
 
         No        Yes 
 0.91926935 0.08073065 
@@ -23,6 +25,7 @@ prop.table(table(app_test$TARGET))
 
 
 ![image](https://github.com/andrew-walton13/capstone2/assets/123606002/baf6dfa4-5da8-4d3a-8ef2-f6208499c646)
+
 
 We built various models in our group, as we wanted to try a few different options. We had three models that were pretty successful in various ways, but ultimately we decided that our logistic regression model would be the best model to recommend to home credit. There were various reasons behind this. One, it had a very good AUC score. Two, being a logistic regression model it was easier to explain why the model made the predictions that it made, which we wouldn't be able to do with the black box models we built. This is important for a financial institution to ensure there is reasoning behind loan decisions and could protect them from potential claims of discrimination. Third, it had the fastest compute time of all of our models by a fairly significant margin.
 
@@ -34,6 +37,16 @@ My contribution to the project consisted of a few different things. I built Naiv
 # The business value of the solution
 
 Our solution can be vey valuable to the company. If they were to use our model, they would be able to identify more of the people that are likely to default on loans and by avoiding lending to those individuals, they will save themselves millions of dollars in the process. It could also give them more confidence about lending money to more people, as a classification of 'non-default' could lead them to feel more confident in lending to that person and therefore provide more people with loans. This would be a great outcome since lending to people who are underserved by the wider banking system is a goal of the company. 
+
+![image](https://github.com/andrew-walton13/capstone2/assets/123606002/7309958a-3ec9-41bd-9801-a365c2293bbc)
+
+Assumptions in $100k
+Average Cost of Default Loan -$10
+Average Revenue from Non-Default Loan $1
+
+
+![image](https://github.com/andrew-walton13/capstone2/assets/123606002/88f89a70-6aa0-4004-a86f-f25f134e6a76)
+
 
 # Difficulties that your group encountered along the way
 
